@@ -107,11 +107,6 @@
   .flag{display:inline-flex;align-items:center;gap:6px;font-family:'JetBrains Mono',monospace;
     font-size:11px;background:rgba(251,191,92,.14);color:var(--amber);
     border:1px solid rgba(251,191,92,.4);padding:3px 9px;border-radius:7px;letter-spacing:.03em;}
-  .flag.rej{background:rgba(251,113,133,.14);color:var(--rose);border-color:rgba(251,113,133,.4);}
-  .reject-title{font-family:'Space Grotesk',sans-serif;font-size:17px;font-weight:600;color:var(--text);margin:10px 0 6px;}
-  .reject-msg{font-size:13px;color:var(--muted);margin-bottom:9px;line-height:1.5;}
-  .reject-detail{font-size:12px;color:var(--dim);border-top:1px solid var(--line);padding-top:9px;}
-  .reject-detail em{color:var(--muted);font-style:italic;}
 
   .bar-row{margin:8px 0;}
   .bar-top{display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px;}
@@ -182,13 +177,7 @@
 <script>
 const CLASSES=["aedes_aegypti","anopheles_gambiae","anopheles_stephensi"];
 const PRETTY={aedes_aegypti:"Aedes aegypti",anopheles_gambiae:"An. gambiae",anopheles_stephensi:"An. stephensi"};
-const IMG=256,RESIZE=291,MEAN=[0.485,0.456,0.406],STD=[0.229,0.224,0.225];
-// 3-class rejection: need a high top prob AND a clear margin over 2nd place.
-// A real specimen has a confident, decisive winner; junk images tend to be
-// either low-confidence or split. Tuned so selfies/non-mosquitoes get rejected.
-const REPORT_THRESHOLD=0.80;   // top prob must clear this
-const MARGIN_THRESHOLD=0.45;   // top must beat 2nd by at least this
-const CONF=0.80;               // below this (but reported) = flag for review
+const IMG=256,RESIZE=291,MEAN=[0.485,0.456,0.406],STD=[0.229,0.224,0.225],CONF=0.75;
 let session=null,items=[],idc=0;
 
 async function loadModel(){
@@ -233,14 +222,7 @@ function render(){
       ? '<div class="imgcell model"><img src="'+it.crop+'" alt="Cropped region analysed for specimen '+(idx+1)+'"><span class="cap">Resized input</span></div>'
       : '<div class="imgcell"><img src="'+it.url+'" alt="" style="opacity:.22"><span class="cap">Crop pending</span></div>';
     let readout;
-    if(it.done && it.rejected){
-      const p=it.probs,top=it.top,pct=(p[top]*100).toFixed(0);
-      readout='<div class="verdict reject"><span class="flag rej">No confident match</span></div>'+
-        '<div class="reject-title">Try a clearer mosquito photo</div>'+
-        '<div class="reject-msg">Nothing here matched a species closely enough to report. Usually this means the photo isn\'t a mosquito, is out of focus, or the specimen is too small or obscured to read.</div>'+
-        '<div class="reject-detail">Closest was <em>'+PRETTY[CLASSES[top]]+'</em> at '+pct+'% — below the reporting bar, so it is not shown as a result.</div>'+
-        '<div class="meta">'+it.ms+' ms · processed on-device</div>';
-    }else if(it.done){
+    if(it.done){
       const p=it.probs,top=it.top,low=p[top]<CONF;
       const head=low
         ? '<div class="verdict"><span class="flag">⚑ Flag for expert review</span><span class="pct">top: '+PRETTY[CLASSES[top]]+' '+(p[top]*100).toFixed(0)+'%</span></div>'
@@ -269,10 +251,7 @@ async function runAll(){
     const img=await loadImage(it.url);const {tensor,crop}=preprocess(img);it.crop=crop;render();
     const t0=performance.now();const out=await session.run({input:tensor});
     const p=softmax(Array.from(out.logits.data));let top=0;for(let i=1;i<3;i++)if(p[i]>p[top])top=i;
-    const sorted=[...p].sort((a,b)=>b-a);const margin=sorted[0]-sorted[1];
-    it.probs=p;it.top=top;it.margin=margin;
-    it.rejected=(p[top]<REPORT_THRESHOLD)||(margin<MARGIN_THRESHOLD);
-    it.ms=Math.round(performance.now()-t0);it.done=true;render();
+    it.probs=p;it.top=top;it.ms=Math.round(performance.now()-t0);it.done=true;render();
   }
   setStatus(items.length+' specimen(s) identified on-device.',true);
 }
