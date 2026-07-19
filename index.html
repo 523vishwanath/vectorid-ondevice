@@ -189,17 +189,61 @@ loadModel();
 function setStatus(t,live){const s=document.getElementById('status');s.textContent=t;s.classList.toggle('live',!!live);}
 function refreshRun(){document.getElementById('runBtn').disabled=!(session&&items.some(i=>!i.done));}
 
-function preprocess(img){
-  // ASPECT-PRESERVING: take the largest CENTERED SQUARE of the original
-  // (no squishing), then scale that square to 256x256. Matches training's
-  // resize-shorter-side + center-crop far better than distorting the whole frame.
+// ---- Dark-pixel bounding box crop (finds the dark mosquito on a light tray) ----
+// Drops the top strip (specimen-ID label), thresholds dark pixels, crops to their
+// bounding box. Falls back to a centered square if the detection looks unreliable.
+const TOP_DROP=0.15;        // cut top 15% (label lives there)
+const DARK_FRAC=0.55;       // "dark" = brightness below 55% of the image's median-ish
+const MARGIN=0.12;          // pad the box by 12% of its size
+
+function centeredSquare(img){
   const W=img.naturalWidth||img.width, H=img.naturalHeight||img.height;
-  const side=Math.min(W,H);
-  const sx=(W-side)/2, sy=(H-side)/2;           // source square (centered)
+  const s=Math.min(W,H);
+  return {sx:(W-s)/2, sy:(H-s)/2, sw:s, sh:s};
+}
+
+function darkBox(img){
+  // downscale to a small analysis canvas for speed
+  const AW=200, AH=Math.max(1,Math.round(200*(img.naturalHeight||img.height)/(img.naturalWidth||img.width)));
+  const ac=document.createElement('canvas');ac.width=AW;ac.height=AH;
+  const actx=ac.getContext('2d');actx.drawImage(img,0,0,AW,AH);
+  const d=actx.getImageData(0,0,AW,AH).data;
+  const y0=Math.floor(AH*TOP_DROP);  // skip label strip
+  // brightness stats to set an adaptive threshold
+  let sum=0,cnt=0,maxb=0;
+  for(let y=y0;y<AH;y++)for(let x=0;x<AW;x++){
+    const p=(y*AW+x)*4;const b=0.299*d[p]+0.587*d[p+1]+0.114*d[p+2];
+    sum+=b;cnt++;if(b>maxb)maxb=b;
+  }
+  const mean=sum/Math.max(1,cnt);
+  const thr=mean*DARK_FRAC;   // pixels darker than this are "specimen"
+  let minx=AW,miny=AH,maxx=0,maxy=0,dark=0;
+  for(let y=y0;y<AH;y++)for(let x=0;x<AW;x++){
+    const p=(y*AW+x)*4;const b=0.299*d[p]+0.587*d[p+1]+0.114*d[p+2];
+    if(b<thr){dark++;if(x<minx)minx=x;if(x>maxx)maxx=x;if(y<miny)miny=y;if(y>maxy)maxy=y;}
+  }
+  const frac=dark/Math.max(1,cnt);
+  // reject if too little (found nothing) or too much (dark background) -> fallback
+  if(frac<0.005 || frac>0.6 || maxx<=minx || maxy<=miny) return null;
+  // add margin, convert back to full-res coords
+  const scaleX=(img.naturalWidth||img.width)/AW, scaleY=(img.naturalHeight||img.height)/AH;
+  let bw=maxx-minx, bh=maxy-miny;
+  minx-=bw*MARGIN;maxx+=bw*MARGIN;miny-=bh*MARGIN;maxy+=bh*MARGIN;
+  minx=Math.max(0,minx);miny=Math.max(0,miny);maxx=Math.min(AW,maxx);maxy=Math.min(AH,maxy);
+  // make it square around the box center (model wants square input)
+  let cx=(minx+maxx)/2, cy=(miny+maxy)/2, half=Math.max(maxx-minx,maxy-miny)/2;
+  let sx=(cx-half)*scaleX, sy=(cy-half)*scaleY, s=half*2*Math.max(scaleX,scaleY);
+  // clamp to image
+  const FW=img.naturalWidth||img.width, FH=img.naturalHeight||img.height;
+  if(sx<0)sx=0; if(sy<0)sy=0; if(sx+s>FW)s=FW-sx; if(sy+s>FH)s=FH-sy;
+  return {sx,sy,sw:s,sh:s};
+}
+
+function preprocess(img){
+  const box = darkBox(img) || centeredSquare(img);   // smart crop, safe fallback
   const disp=document.createElement('canvas');disp.width=IMG;disp.height=IMG;
-  const dctx=disp.getContext('2d');
-  dctx.imageSmoothingQuality='high';
-  dctx.drawImage(img, sx,sy,side,side, 0,0,IMG,IMG);  // crop+scale in one step
+  const dctx=disp.getContext('2d');dctx.imageSmoothingQuality='high';
+  dctx.drawImage(img, box.sx,box.sy,box.sw,box.sh, 0,0,IMG,IMG);
   const imgData=dctx.getImageData(0,0,IMG,IMG);
   const d=imgData.data,arr=new Float32Array(3*IMG*IMG);
   for(let y=0;y<IMG;y++)for(let x=0;x<IMG;x++){const p=(y*IMG+x)*4;
