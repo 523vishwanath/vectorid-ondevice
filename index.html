@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VectorID — Field mosquito surveillance</title>
+<script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.20.1/dist/ort.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+  /* ---- Palette: black + rich violet (RunPod-adjacent), tuned for WCAG AA ----
+     text #ECEAF4 on #0B0912 = 15.4:1 | muted #A9A2C4 on #0B0912 = 8.0:1
+     violet #A78BFA on #0B0912 = 7.2:1 | on-violet text uses #0B0912 (dark) = AA */
+  :root{
+    --void:#0B0912; --bg:#0E0B18; --surface:#161227; --surface2:#1E1836;
+    --line:#2B2444; --line2:#3A2F5C;
+    --text:#ECEAF4; --muted:#A9A2C4; --dim:#7E7699;
+    --violet:#A78BFA; --violet-bright:#B79DFF; --violet-deep:#7C3AED;
+    --violet-glow:rgba(124,58,237,.35);
+    --mint:#5EEAD4; --amber:#FBBF5C; --amber-ink:#241a04; --rose:#FB7185;
+    --focus:#C4B5FD;
+  }
+  *{box-sizing:border-box;}
+  html{-webkit-text-size-adjust:100%;}
+  body{
+    margin:0;font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;
+    color:var(--text);line-height:1.55;padding:22px 16px 44px;max-width:680px;margin:0 auto;
+    background:
+      radial-gradient(1100px 500px at 50% -8%, rgba(124,58,237,.20), transparent 60%),
+      radial-gradient(700px 400px at 100% 0%, rgba(94,234,212,.06), transparent 55%),
+      var(--void);
+    min-height:100vh;
+  }
+  ::selection{background:var(--violet);color:var(--void);}
+  :focus-visible{outline:3px solid var(--focus);outline-offset:2px;border-radius:8px;}
+
+  header{padding:6px 2px 18px;}
+  .eyebrow{display:inline-flex;align-items:center;gap:7px;font-family:'JetBrains Mono',monospace;
+    font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--violet);
+    background:rgba(124,58,237,.12);border:1px solid var(--line2);padding:5px 11px;border-radius:999px;}
+  .eyebrow .dot{width:6px;height:6px;border-radius:50%;background:var(--mint);
+    box-shadow:0 0 8px var(--mint);}
+  .logo{font-family:'Space Grotesk',sans-serif;font-size:38px;font-weight:700;
+    letter-spacing:-.5px;line-height:1;margin-top:14px;}
+  .logo .id{background:linear-gradient(100deg,var(--violet-bright),var(--mint));
+    -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;}
+  .lede{color:var(--muted);font-size:14px;margin-top:10px;max-width:54ch;}
+  .lede em{color:var(--text);font-style:normal;font-weight:500;}
+
+  .card{background:linear-gradient(180deg,var(--surface),var(--bg));
+    border:1px solid var(--line);border-radius:18px;padding:18px;margin-top:18px;
+    box-shadow:0 1px 0 rgba(255,255,255,.03) inset, 0 20px 50px -20px rgba(0,0,0,.7);}
+
+  .controls{display:grid;grid-template-columns:1fr 1fr;gap:11px;}
+  .btn{display:flex;align-items:center;justify-content:center;gap:9px;
+    padding:14px 12px;border:1px solid transparent;border-radius:12px;
+    font-family:'Inter',sans-serif;font-size:15px;font-weight:600;cursor:pointer;
+    transition:transform .08s ease,background .16s ease,box-shadow .16s ease;}
+  .btn:active{transform:translateY(1px) scale(.99);}
+  .btn svg{width:19px;height:19px;flex:0 0 auto;}
+  .btn-primary{background:linear-gradient(180deg,var(--violet),var(--violet-deep));
+    color:#fff;box-shadow:0 8px 24px -8px var(--violet-glow);}
+  .btn-primary:hover{box-shadow:0 10px 30px -8px var(--violet-glow);}
+  .btn-ghost{background:var(--surface2);color:var(--text);border-color:var(--line2);}
+  .btn-ghost:hover{background:#241d40;}
+  .btn-run{grid-column:1/-1;background:linear-gradient(100deg,var(--violet-deep),var(--violet));
+    color:#fff;font-size:16px;box-shadow:0 10px 30px -10px var(--violet-glow);}
+  .btn-run:hover{filter:brightness(1.08);}
+  .btn:disabled{opacity:.4;cursor:not-allowed;transform:none;filter:none;box-shadow:none;}
+  input[type=file]{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);border:0;}
+
+  #status{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--dim);
+    margin-top:13px;text-align:center;min-height:16px;}
+  #status.live{color:var(--mint);}
+
+  .queue{margin-top:16px;display:flex;flex-direction:column;gap:14px;}
+  .empty{border:1px dashed var(--line2);border-radius:16px;text-align:center;
+    color:var(--muted);font-size:14px;padding:34px 20px;background:rgba(124,58,237,.04);}
+
+  .specimen{background:linear-gradient(180deg,var(--surface),var(--bg));
+    border:1px solid var(--line);border-radius:16px;overflow:hidden;
+    box-shadow:0 16px 40px -22px rgba(0,0,0,.8);}
+  .specimen-head{display:flex;justify-content:space-between;align-items:center;
+    padding:11px 14px;border-bottom:1px solid var(--line);}
+  .specimen-head .name{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--dim);letter-spacing:.05em;}
+  .del{width:32px;height:32px;border-radius:9px;background:transparent;border:1px solid var(--line2);
+    color:var(--muted);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s;}
+  .del:hover{background:var(--rose);color:var(--void);border-color:var(--rose);}
+  .del svg{width:16px;height:16px;}
+
+  .images{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--line);}
+  .imgcell{background:#000;position:relative;}
+  .imgcell img,.imgcell canvas{width:100%;display:block;aspect-ratio:1/1;object-fit:contain;}
+  .imgcell .cap{position:absolute;bottom:0;left:0;right:0;
+    font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.07em;
+    text-transform:uppercase;color:var(--text);background:linear-gradient(0deg,rgba(11,9,18,.9),rgba(11,9,18,.2));
+    padding:5px 9px;}
+  .imgcell.model .cap{color:var(--mint);}
+
+  .readout{padding:15px;}
+  .verdict{font-size:16px;font-weight:600;margin-bottom:11px;display:flex;align-items:baseline;gap:9px;flex-wrap:wrap;}
+  .verdict .sp{font-family:'Space Grotesk',sans-serif;font-style:italic;font-size:20px;}
+  .verdict .pct{font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--muted);}
+  .verdict.ok .sp{color:var(--violet-bright);}
+  .verdict.pending{color:var(--dim);font-weight:500;font-size:14px;}
+  .flag{display:inline-flex;align-items:center;gap:6px;font-family:'JetBrains Mono',monospace;
+    font-size:11px;background:rgba(251,191,92,.14);color:var(--amber);
+    border:1px solid rgba(251,191,92,.4);padding:3px 9px;border-radius:7px;letter-spacing:.03em;}
+
+  .bar-row{margin:8px 0;}
+  .bar-top{display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px;}
+  .bar-top .sp{font-family:'Space Grotesk',sans-serif;font-style:italic;color:var(--text);}
+  .bar-top .n{font-family:'JetBrains Mono',monospace;color:var(--muted);font-size:12px;}
+  .bar-track{height:8px;background:var(--void);border-radius:6px;overflow:hidden;border:1px solid var(--line);}
+  .bar-fill{height:100%;border-radius:6px;transition:width .55s cubic-bezier(.2,.8,.2,1);}
+  .meta{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--dim);margin-top:9px;}
+
+  .note{background:rgba(251,113,133,.06);border:1px solid rgba(251,113,133,.25);
+    border-left:3px solid var(--rose);border-radius:12px;padding:14px 16px;margin-top:18px;
+    font-size:12.5px;color:var(--muted);}
+  .note strong{color:var(--text);}
+
+  footer{margin-top:22px;padding-top:15px;border-top:1px solid var(--line);
+    font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--dim);
+    display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;}
+  a{color:var(--violet);text-decoration:none;}
+  a:hover{color:var(--violet-bright);text-decoration:underline;}
+
+  @media (prefers-reduced-motion:reduce){*{transition:none!important;}}
+  @media (max-width:420px){.images{grid-template-columns:1fr;}.logo{font-size:32px;}}
+</style>
+</head>
+<body>
+<header>
+  <span class="eyebrow"><span class="dot"></span>Malaria vector surveillance</span>
+  <div class="logo">Vector<span class="id">ID</span></div>
+  <p class="lede">On-device identification of <em>Aedes aegypti</em>,
+    <em>Anopheles gambiae</em>, and the invasive <em>Anopheles stephensi</em>.
+    Runs entirely on your phone — no connection needed after the first load.</p>
+</header>
+
+<section class="card" aria-label="Add specimens">
+  <div class="controls">
+    <label for="camera" class="btn btn-primary">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+      Capture
+    </label>
+    <input type="file" id="camera" accept="image/*" capture="environment" aria-label="Capture photo with camera">
+    <label for="gallery" class="btn btn-ghost">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+      Add images
+    </label>
+    <input type="file" id="gallery" accept="image/*" multiple aria-label="Add one or more images from gallery">
+    <button class="btn btn-run" id="runBtn" disabled>Identify all specimens</button>
+    <button class="btn btn-ghost" id="clearBtn" style="grid-column:1/-1" disabled>Clear all</button>
+  </div>
+  <div id="status" role="status" aria-live="polite">Loading model…</div>
+</section>
+
+<section class="queue" id="queue" aria-label="Specimen queue">
+  <div class="empty" id="emptyMsg">No specimens yet. Capture a photo or add images to begin.</div>
+</section>
+
+<div class="note">
+  <strong>Research demo — not yet field-ready.</strong> Field macro-F1 is ≈ 0.65, and the two
+  <em>Anopheles</em> species are frequently confused — which is the core surveillance task.
+  Uncertain results are flagged for expert review. There is no "not a mosquito" category, so
+  any image is assigned to one of the three species.
+</div>
+
+<footer>
+  <span>On-device · ONNX Runtime Web</span>
+  <span><a href="https://github.com/523vishwanath">github.com/523vishwanath</a></span>
+</footer>
+
+<script>
+const CLASSES=["aedes_aegypti","anopheles_gambiae","anopheles_stephensi"];
+const PRETTY={aedes_aegypti:"Aedes aegypti",anopheles_gambiae:"An. gambiae",anopheles_stephensi:"An. stephensi"};
+const IMG=256,RESIZE=291,MEAN=[0.485,0.456,0.406],STD=[0.229,0.224,0.225],CONF=0.75;
+let session=null,items=[],idc=0;
+
+async function loadModel(){
+  try{
+    session=await ort.InferenceSession.create('./vectorcam.onnx',{executionProviders:['wasm']});
+    setStatus('Model ready. Add specimens to begin.',true);refreshRun();
+  }catch(e){setStatus('Could not load model: '+e.message,false);}
+}
+loadModel();
+function setStatus(t,live){const s=document.getElementById('status');s.textContent=t;s.classList.toggle('live',!!live);}
+function refreshRun(){
+  document.getElementById('runBtn').disabled=!(session&&items.some(i=>!i.done));
+  document.getElementById('clearBtn').disabled=!items.length;
+}
+function clearAll(){
+  items.forEach(it=>URL.revokeObjectURL(it.url));
+  items=[];render();setStatus('Cleared. Add specimens to begin.',false);
+}
+
+// ---- Dark-pixel bounding box crop (finds the dark mosquito on a light tray) ----
+// Drops the top strip (specimen-ID label), thresholds dark pixels, crops to their
+// bounding box. Falls back to a centered square if the detection looks unreliable.
+const TOP_DROP=0.15;        // cut top 15% (label lives there)
+const DARK_FRAC=0.55;       // "dark" = brightness below 55% of the image's median-ish
+const MARGIN=0.12;          // pad the box by 12% of its size
+
+function centeredSquare(img){
+  const W=img.naturalWidth||img.width, H=img.naturalHeight||img.height;
+  const s=Math.min(W,H);
+  return {sx:(W-s)/2, sy:(H-s)/2, sw:s, sh:s};
+}
+
+function darkBox(img){
+  // downscale to a small analysis canvas for speed
+  const AW=200, AH=Math.max(1,Math.round(200*(img.naturalHeight||img.height)/(img.naturalWidth||img.width)));
+  const ac=document.createElement('canvas');ac.width=AW;ac.height=AH;
+  const actx=ac.getContext('2d');actx.drawImage(img,0,0,AW,AH);
+  const d=actx.getImageData(0,0,AW,AH).data;
+  const y0=Math.floor(AH*TOP_DROP);  // skip label strip
+  // brightness stats to set an adaptive threshold
+  let sum=0,cnt=0,maxb=0;
+  for(let y=y0;y<AH;y++)for(let x=0;x<AW;x++){
+    const p=(y*AW+x)*4;const b=0.299*d[p]+0.587*d[p+1]+0.114*d[p+2];
+    sum+=b;cnt++;if(b>maxb)maxb=b;
+  }
+  const mean=sum/Math.max(1,cnt);
+  const thr=mean*DARK_FRAC;   // pixels darker than this are "specimen"
+  let minx=AW,miny=AH,maxx=0,maxy=0,dark=0;
+  for(let y=y0;y<AH;y++)for(let x=0;x<AW;x++){
+    const p=(y*AW+x)*4;const b=0.299*d[p]+0.587*d[p+1]+0.114*d[p+2];
+    if(b<thr){dark++;if(x<minx)minx=x;if(x>maxx)maxx=x;if(y<miny)miny=y;if(y>maxy)maxy=y;}
+  }
+  const frac=dark/Math.max(1,cnt);
+  // reject if too little (found nothing) or too much (dark background) -> fallback
+  if(frac<0.005 || frac>0.6 || maxx<=minx || maxy<=miny) return null;
+  // add margin, convert back to full-res coords
+  const scaleX=(img.naturalWidth||img.width)/AW, scaleY=(img.naturalHeight||img.height)/AH;
+  let bw=maxx-minx, bh=maxy-miny;
+  minx-=bw*MARGIN;maxx+=bw*MARGIN;miny-=bh*MARGIN;maxy+=bh*MARGIN;
+  minx=Math.max(0,minx);miny=Math.max(0,miny);maxx=Math.min(AW,maxx);maxy=Math.min(AH,maxy);
+  // make it square around the box center (model wants square input)
+  let cx=(minx+maxx)/2, cy=(miny+maxy)/2, half=Math.max(maxx-minx,maxy-miny)/2;
+  let sx=(cx-half)*scaleX, sy=(cy-half)*scaleY, s=half*2*Math.max(scaleX,scaleY);
+  // clamp to image
+  const FW=img.naturalWidth||img.width, FH=img.naturalHeight||img.height;
+  if(sx<0)sx=0; if(sy<0)sy=0; if(sx+s>FW)s=FW-sx; if(sy+s>FH)s=FH-sy;
+  return {sx,sy,sw:s,sh:s};
+}
+
+function preprocess(img){
+  const box = darkBox(img) || centeredSquare(img);   // smart crop, safe fallback
+  const disp=document.createElement('canvas');disp.width=IMG;disp.height=IMG;
+  const dctx=disp.getContext('2d');dctx.imageSmoothingQuality='high';
+  dctx.drawImage(img, box.sx,box.sy,box.sw,box.sh, 0,0,IMG,IMG);
+  const imgData=dctx.getImageData(0,0,IMG,IMG);
+  const d=imgData.data,arr=new Float32Array(3*IMG*IMG);
+  for(let y=0;y<IMG;y++)for(let x=0;x<IMG;x++){const p=(y*IMG+x)*4;
+    for(let ch=0;ch<3;ch++){const v=d[p+ch]/255;arr[ch*IMG*IMG+y*IMG+x]=(v-MEAN[ch])/STD[ch];}}
+  return {tensor:new ort.Tensor('float32',arr,[1,3,IMG,IMG]),crop:disp.toDataURL()};
+}
+function softmax(a){const m=Math.max(...a),e=a.map(v=>Math.exp(v-m)),s=e.reduce((x,y)=>x+y,0);return e.map(v=>v/s);}
+function fill(i,probs,top){if(i!==top)return'var(--surface2)';return probs[top]<CONF?'var(--amber)':'linear-gradient(90deg,var(--violet),var(--mint))';}
+
+function render(){
+  const q=document.getElementById('queue');
+  document.getElementById('emptyMsg').style.display=items.length?'none':'block';
+  [...q.querySelectorAll('.specimen')].forEach(n=>n.remove());
+  items.forEach((it,idx)=>{
+    const el=document.createElement('div');el.className='specimen';
+    const cropCell=it.crop
+      ? '<div class="imgcell model"><img src="'+it.crop+'" alt="Cropped region analysed for specimen '+(idx+1)+'"><span class="cap">Model input</span></div>'
+      : '<div class="imgcell"><img src="'+it.url+'" alt="" style="opacity:.22"><span class="cap">Crop pending</span></div>';
+    let readout;
+    if(it.done){
+      const p=it.probs,top=it.top,low=p[top]<CONF;
+      const head=low
+        ? '<div class="verdict"><span class="flag">⚑ Flag for expert review</span><span class="pct">top: '+PRETTY[CLASSES[top]]+' '+(p[top]*100).toFixed(0)+'%</span></div>'
+        : '<div class="verdict ok"><span class="sp">'+PRETTY[CLASSES[top]]+'</span><span class="pct">'+(p[top]*100).toFixed(0)+'% confidence</span></div>';
+      const order=[0,1,2].sort((a,b)=>p[b]-p[a]);
+      const bars=order.map(i=>'<div class="bar-row"><div class="bar-top"><span class="sp">'+PRETTY[CLASSES[i]]+'</span><span class="n">'+(p[i]*100).toFixed(1)+'%</span></div><div class="bar-track"><div class="bar-fill" style="width:'+(p[i]*100)+'%;background:'+fill(i,p,top)+'"></div></div></div>').join('');
+      readout=head+bars+'<div class="meta">'+it.ms+' ms · processed on-device</div>';
+    }else readout='<div class="verdict pending">Queued — ready to identify</div>';
+    el.innerHTML='<div class="specimen-head"><span class="name">SPECIMEN '+String(idx+1).padStart(2,'0')+'</span>'+
+      '<button class="del" data-id="'+it.id+'" aria-label="Remove specimen '+(idx+1)+'"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M18 6L6 18M6 6l12 12"/></svg></button></div>'+
+      '<div class="images"><div class="imgcell"><img src="'+it.url+'" alt="Uploaded photo of specimen '+(idx+1)+'"><span class="cap">Your photo</span></div>'+cropCell+'</div>'+
+      '<div class="readout">'+readout+'</div>';
+    q.appendChild(el);
+  });
+  document.querySelectorAll('.del').forEach(b=>b.onclick=()=>remove(+b.dataset.id));
+  refreshRun();
+}
+function addFiles(fl){[...fl].forEach(f=>{if(!f.type.startsWith('image/'))return;items.push({id:idc++,file:f,url:URL.createObjectURL(f),done:false,crop:null});});render();setStatus(items.length+' specimen(s) queued.',false);}
+function remove(id){const it=items.find(x=>x.id===id);if(it)URL.revokeObjectURL(it.url);items=items.filter(x=>x.id!==id);render();setStatus(items.length?items.length+' specimen(s) queued.':'Queue empty.',false);}
+function loadImage(u){return new Promise(r=>{const im=new Image();im.onload=()=>r(im);im.src=u;});}
+
+async function runAll(){
+  if(!session)return;document.getElementById('runBtn').disabled=true;
+  for(const it of items){
+    if(it.done)continue;setStatus('Identifying…',true);
+    const img=await loadImage(it.url);const {tensor,crop}=preprocess(img);it.crop=crop;render();
+    const t0=performance.now();const out=await session.run({input:tensor});
+    const p=softmax(Array.from(out.logits.data));let top=0;for(let i=1;i<3;i++)if(p[i]>p[top])top=i;
+    it.probs=p;it.top=top;it.ms=Math.round(performance.now()-t0);it.done=true;render();
+  }
+  setStatus(items.length+' specimen(s) identified on-device.',true);
+}
+document.getElementById('camera').addEventListener('change',e=>{addFiles(e.target.files);e.target.value='';});
+document.getElementById('gallery').addEventListener('change',e=>{addFiles(e.target.files);e.target.value='';});
+document.getElementById('runBtn').addEventListener('click',runAll);
+document.getElementById('clearBtn').addEventListener('click',clearAll);
+</script>
+</body>
+</html>
