@@ -153,6 +153,7 @@
     </label>
     <input type="file" id="gallery" accept="image/*" multiple aria-label="Add one or more images from gallery">
     <button class="btn btn-run" id="runBtn" disabled>Identify all specimens</button>
+    <button class="btn btn-ghost" id="clearBtn" style="grid-column:1/-1" disabled>Clear all</button>
   </div>
   <div id="status" role="status" aria-live="polite">Loading model…</div>
 </section>
@@ -187,7 +188,14 @@ async function loadModel(){
 }
 loadModel();
 function setStatus(t,live){const s=document.getElementById('status');s.textContent=t;s.classList.toggle('live',!!live);}
-function refreshRun(){document.getElementById('runBtn').disabled=!(session&&items.some(i=>!i.done));}
+function refreshRun(){
+  document.getElementById('runBtn').disabled=!(session&&items.some(i=>!i.done));
+  document.getElementById('clearBtn').disabled=!items.length;
+}
+function clearAll(){
+  items.forEach(it=>URL.revokeObjectURL(it.url));
+  items=[];render();setStatus('Cleared. Add specimens to begin.',false);
+}
 
 // ---- Dark-pixel bounding box crop (finds the dark mosquito on a light tray) ----
 // Drops the top strip (specimen-ID label), thresholds dark pixels, crops to their
@@ -299,6 +307,7 @@ async function runAll(){
 document.getElementById('camera').addEventListener('change',e=>{addFiles(e.target.files);e.target.value='';});
 document.getElementById('gallery').addEventListener('change',e=>{addFiles(e.target.files);e.target.value='';});
 document.getElementById('runBtn').addEventListener('click',runAll);
+document.getElementById('clearBtn').addEventListener('click',clearAll);
 </script>
 </body>
 </html>
