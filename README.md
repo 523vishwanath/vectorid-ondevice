@@ -14,7 +14,7 @@ Can we build a pipeline that classifies field specimens reliably enough to deplo
 | **System diagram** (capture → prediction) | [`system_diagram.svg`](system_diagram.svg) |
 | **Reproducible pipeline** | `scripts/` + `notebooks/` (see below) |
 | **What next / data ask** | end of [`WRITEUP.md`](WRITEUP.md) |
-| **Live on-device demo** (bonus) | [github.com/523vishwanath/vectorid-ondevice](https://github.com/523vishwanath/vectorid-ondevice) |
+| **Live on-device demo**  | [github.com/523vishwanath/vectorid-ondevice](https://github.com/523vishwanath/vectorid-ondevice) |
 
 ---
 
