@@ -4,98 +4,94 @@
 
 ---
 
-## Recommendation: NO-GO this quarter
+## My call: not this quarter.
 
-**The number I stake this on: macro-F1 ≈ 0.65 on held-out Kenya field specimens.**
+**The number I'd stake it on: macro-F1 ≈ 0.65 on Kenya field specimens the model has never seen.**
 
-A classifier trained on the insectary data reaches ~0.99 in the lab but drops to **0.648 macro-F1** on real Kenya field images. The failure lands exactly where the program cannot afford it: the model cannot reliably tell the two *Anopheles* species apart (*An. gambiae* F1 0.56, *An. stephensi* F1 0.49). Since the program's primary objective is detecting invasive *An. stephensi* among established *An. gambiae*, a model that identifies the invasive target barely better than chance is not deployable.
+A classifier trained on the insectary data looks excellent in the lab — about 0.99. But that number evaporates on real Kenya field images, where it lands at **0.648**. And it fails in the worst possible place: it can't reliably tell the two *Anopheles* apart (*An. gambiae* 0.56, *An. stephensi* 0.49). Since the entire point of the program is spotting invasive *An. stephensi* hiding among *An. gambiae*, a model that calls that distinction barely better than a coin flip isn't something I'd deploy.
 
-This is a **no-go with a proven path to go.** Below I show the gap is caused by *missing field training data*, not by the model — and that adding even a small amount of field data lifts field macro-F1 by **+0.31**, taking all three species above 0.95. The fix is a targeted collection effort, specified at the end.
+So it's a no-go — but a confident one, because I know *why*, and I know the fix. The gap isn't the model. It's missing field data. When I add even a small amount of Kenya data to training, field performance jumps by **+0.31**, and all three species clear 0.95. The path to "go" is a specific, targeted collection effort, laid out at the end.
 
 ---
 
-## How I set up the evaluation, and why the number is honest
+## How I measured it, and why I trust the number
 
-**The trap I deliberately avoided.** The easy way to post a high number is to pool everything (insectary + Kenya) and split it randomly. That scores ~0.95 — but it puts field data in the training set and makes the test set specimens the model has effectively already seen. It answers "can it re-recognize familiar specimens?", not "will it work in Kenya?". That is the high number I could not defend, so I did not use it.
+**The tempting shortcut I didn't take.** The easy way to post a big number is to throw all the data — insectary and Kenya — into one pile and split it randomly. Do that and you get ~0.95. But it's a lie: it drops Kenya specimens into training and then tests on specimens the model has effectively already met. It answers "can you re-recognize something familiar?" when the real question is "will you work in Kenya?" I threw that split out.
 
-**The split I used — insectary → Kenya.** Train and validate on insectary data (drops 0610, 0618); then test on data the model never saw, in two stages that mirror deployment:
+**The split I actually used.** Train on insectary (0610, 0618). Then test on data the model has never touched, in two steps:
 
-| Test set | What it probes | Macro-F1 |
+| Test | What it really asks | Macro-F1 |
 |---|---|---|
-| **Test A — 0623 (new phones)** | generalization to unseen devices | **0.92** |
-| **Test B — Kenya (field)** | deployment reality | **0.65** |
+| **0623 — new phones** | does it survive an unseen device? | **0.92** |
+| **Kenya — field** | does it survive the field? | **0.65** |
 
-Insectary → Kenya *is* the deployment: a lab-trained model meeting field data for the first time. That is why the 0.65, not the 0.95, is the number I report.
+Insectary → Kenya isn't an arbitrary choice. It *is* the deployment: a lab-trained model meeting the field cold. That's why I report 0.65 and not 0.95 — one is the truth about deployment, the other is a story I told myself with leaked data.
 
-**Leakage control.** Splits are grouped by `SpecimenID`, never by image. Each insectary specimen is photographed ~20 times; splitting by image would scatter near-duplicates across train and test and inflate the score. A hard assertion fails the run if any specimen lands in two splits.
+**Keeping it honest under the hood.** Every split is grouped by `SpecimenID`, never by image. Each insectary specimen shows up in ~20 photos; split by image and near-identical shots leak across train and test, quietly inflating the score. A hard assertion kills the run if a single specimen lands in two splits.
 
-**Metric — macro-F1, not accuracy.** Kenya is ~two-thirds *An. gambiae*, so a model that always answers "gambiae" would score well on accuracy while being useless for surveillance. Macro-F1 weights all three species equally and penalizes both false positives and false negatives, which is what catching an invasive species demands.
+**Why macro-F1, not accuracy.** Kenya is about two-thirds *An. gambiae*. A lazy model that just yells "gambiae!" every time would score well on plain accuracy while being useless. Macro-F1 treats all three species equally and punishes both kinds of error — which is exactly the pressure you want when the whole job is catching a rare invasive.
 
-**Data judgment before modelling.** I interrogated the four drops before trusting them:
-- **Label contamination:** ten specimens carried images labelled as more than one species. Six (in 0618, at ~29:1 image ratios) were stray-frame mislabels — corrected by majority vote. Four (in 0623) were genuine ID collisions where a specimen ID was reused across sessions — dropped, because they could not be safely resolved.
-- **Unlabelled images** were dropped, not guessed.
-- **Result:** zero species-spanning specimens remain. The cleaned set is 5,479 images / 691 specimens.
+**I cleaned the data before I trusted it.** Ten specimens had images labelled as more than one species. Six (in 0618, at ~29:1 ratios) were obvious stray-frame mistakes — I fixed those by majority vote. Four (in 0623) were genuine ID collisions, the same ID reused across sessions — I dropped those, because guessing would've been worse than losing them. Unlabelled images got dropped, not invented. What's left has zero species-spanning specimens: 5,479 images, 691 specimens.
 
 ---
 
-## The three things that most shaped my confidence
+## The three things that decided my confidence
 
-**1. The gap is data-bound, not model-bound — I tested this six ways.**
-Six architectures from 1.5M to 46M parameters (MobileNetV3, EfficientNet-B0 at two resolutions, EfficientViT-B0/B3, ConvNeXt-nano) all land on Kenya in the same 0.64–0.76 band. A *larger* model (EfficientViT-B3, 46M) did *worse* on Kenya, not better — it overfit the lab. A pure CNN did not beat the hybrid. When 30× more capacity and four architecture families all tie, the ceiling is the data, not the model.
+**1. It's the data, not the model — and I checked that six ways.** I ran six architectures from 1.5M to 46M parameters (MobileNetV3, EfficientNet-B0 at two resolutions, EfficientViT-B0/B3, ConvNeXt-nano). Every one lands on Kenya between 0.64 and 0.76. The *biggest* model did *worse*, not better. A pure CNN didn't beat the hybrid. When 30× more capacity and four different architecture families all pile up at the same wall, the wall is the data. No architecture is going to think its way past missing information.
 
-**2. I ruled out the shortcuts before blaming the data.**
-Grad-CAM on the insectary-only model showed it keying on the *tray background*, not the mosquito — a classic shortcut. I removed the tray with U2Net segmentation and retrained. Cross-device generalization improved (0.89 → 0.92) and Grad-CAM confirmed the model now attends to the specimen — but **Kenya did not recover (~0.65).** So the background was a real shortcut, but not the cause of the field gap. I separately tested and ruled out a fresh-vs-dried "condition shortcut." The gap is intrinsic to the field specimens themselves.
+**2. I ruled out the cheap explanations before blaming the data.** Grad-CAM caught the model red-handed early on — it was looking at the *tray*, not the mosquito. Classic shortcut. So I cut the tray out with U2Net segmentation and retrained. Cross-device generalization improved (0.89 → 0.92), and Grad-CAM confirmed the model was now actually looking at the specimen. But Kenya *still* didn't budge — stuck at ~0.65. That was the tell: the background was a real shortcut, but it wasn't what was breaking field performance. (I separately tested and killed a "fresh vs dried" shortcut theory too.) The gap lives in the field specimens themselves.
 
-**3. The root cause: a condition reversal, compounded by field image quality.**
-Breaking the data down by specimen condition exposes the core problem. For **every** species, the condition seen in training is the *opposite* of the condition seen in Kenya:
+**3. The root cause is a condition reversal — and it's almost poetic how clean it is.** Break the data down by specimen condition and the problem jumps out. For *every single species*, the condition it trained on is the opposite of the condition it meets in Kenya:
 
-| Species | Insectary (train) | Kenya (test) |
+| Species | Trained on | Tested on (Kenya) |
 |---|---|---|
 | *Ae. aegypti* | ~100% fresh | ~100% dried |
 | *An. stephensi* | ~100% fresh | ~100% dried |
 | *An. gambiae* | mostly dried | ~100% fresh |
 
-The model is always tested on the condition it saw *least* for each species. This is why *An. stephensi* is the worst class — the training set contains **zero dried stephensi**, and every Kenya stephensi is dried. Inspecting the images adds a second factor: Kenya specimens are frequently squished, broken, or blurry, with wings obscured — and the wings carry the fine morphology that separates the two *Anopheles*. So the field gap is condition reversal (major), plus genuine field image-quality degradation. Both are data-coverage problems, and both are fixable by collecting the right images.
+The model is always graded on the version of each species it saw *least*. That's exactly why *An. stephensi* is the worst class — there are **zero dried stephensi in training**, and every Kenya stephensi is dried. Looking at the images adds the second half of the story: the Kenya specimens are often squished, broken, or blurry, with the wings — where the *Anopheles* differences actually live — obscured or gone. So the field gap is condition reversal, plus real image-quality degradation. Both are coverage problems. Both are fixable by collecting the right images.
 
 ---
 
-## The evidence that data closes the gap
+## The proof that data closes it
 
-The decisive experiment: split Kenya's specimens in half (grouped by `SpecimenID`, stratified by species, no leakage), add one half to insectary training, and test on the **other, held-out half**.
+Here's the experiment that turns "I think it's the data" into "it's the data." Split Kenya in half by specimen (grouped, stratified, no leakage). Add one half to insectary training. Test on the other half — specimens the model never saw.
 
-| Training set | Held-out Kenya macro-F1 |
+| Trained on | Held-out Kenya macro-F1 |
 |---|---|
-| Insectary only (baseline) | **0.648** |
+| Insectary only | **0.648** |
 | Insectary + ~230 Kenya specimens | **0.955** |
-| **Lift** | **+0.307** |
+| **Lift** | **+0.31** |
 
-Per class, adding field data takes *An. stephensi* from **0.49 → 0.95** and *An. gambiae* from **0.56 → 0.96** — exactly the confusion that blocks deployment. Repeated across three independent random splits, the lift held every time (+0.20, +0.29, +0.27).
+*An. stephensi* goes from **0.49 to 0.95**. *An. gambiae* from **0.56 to 0.96**. That's the exact confusion blocking deployment, resolved by showing the model the field conditions it was missing. I ran it three times on different random splits; the lift held every time (+0.20, +0.29, +0.27).
 
-**Honest calibration.** The 0.955 is *optimistic* — the added Kenya data and the held-out Kenya data come from the same collection sessions, so they share conditions a fresh deployment would not. I therefore report the **+0.31 lift** as the robust finding (field data helps, and a lot), and I do *not* present 0.955 as a production number. The lift is the evidence for the collection ask; the absolute would need more diverse field data to pin down.
-
----
-
-## Recommended model and edge feasibility
-
-**EfficientViT-B0**, trained on segmented crops: **8.5 MB, ~6 ms/image**, small and fast enough for a low-end phone. MobileNetV3 (6 MB) is a fallback if the target hardware handles pure-CNN operations better than attention layers. The classifier runs fully offline. Preprocessing (locating and cropping the specimen) must also run on-device and must match the training crop — for a low-connectivity phone that means a lightweight on-device segmenter (u2netp, ~5 MB) or aligning with VectorCam's existing capture framing. A working on-device browser demo (ONNX Runtime Web, no server, offline after first load) is included, with low-confidence predictions flagged for expert review.
+**Where I keep myself honest:** that 0.955 is optimistic. The Kenya half I trained on and the Kenya half I tested on come from the same collection sessions, so they share conditions a genuinely new deployment wouldn't. So I don't sell 0.955 as a production number — I sell the **+0.31 lift**, which is the robust, repeatable finding. Field data helps, a lot. The exact deployable number needs more diverse field data to pin down — which is precisely what the collection ask is for.
 
 ---
 
-## What I would do next
+## The model I'd ship, and whether it fits a phone
 
-**On the modelling side.**
-1. Add a lightweight on-device segmenter (u2netp) so inference crops match the segmented training crops exactly, removing the train/inference mismatch.
-2. Add a confidence threshold that routes uncertain specimens to human review instead of forcing a guess — the current model has no "not a mosquito" class and no way to abstain.
-3. Once field data arrives, train the production model on a condition-stratified split so it sees every species in both fresh and dried states — but evaluate it on a *held-out future field batch*, so the reported number stays honest.
+**EfficientViT-B0**, trained on segmented crops: **8.5 MB, ~6 ms/image**. Small and fast enough for the low-end phones field teams already carry. MobileNetV3 (6 MB) is my fallback if the target hardware handles plain CNN ops better than attention. The classifier runs fully offline. The one catch: the crop step has to run on-device too and has to match the training crop — for a low-connectivity phone that means a lightweight on-device segmenter (u2netp, ~5 MB) or leaning on VectorCam's existing capture framing.
 
-**What to ask the Kenya team to collect (~2,000 images).** Spend them on the gaps, not evenly:
-- **~35% fresh field *An. stephensi*** — the invasive target; **zero fresh stephensi exist today.**
+I built a working on-device demo to prove the edge story isn't hypothetical: a browser app running the model via ONNX Runtime Web, fully offline after first load (installable as a PWA), with low-confidence and low-margin predictions declined rather than forced — because the model has no "not a mosquito" class, and pretending otherwise in the field would be dangerous.
+
+---
+
+## What I'd do next
+
+**On the modelling side:**
+1. Put a lightweight segmenter (u2netp) on-device so the inference crop matches the training crop — closing the train/inference gap the demo currently papers over.
+2. Add a real abstention path: a confidence-and-margin gate (in the demo already) now, and a proper "not a mosquito" class once there's negative data to train it on.
+3. When field data arrives, train the production model on a condition-stratified split so it sees every species fresh *and* dried — but grade it on a **held-out future field batch**, so the number stays honest.
+
+**What I'd ask the Kenya team to collect (~2,000 images).** Spend them on the holes, not evenly:
+- **~35% fresh field *An. stephensi*** — the invasive target, and we have **zero fresh stephensi** right now.
 - **~40% fresh field *An. gambiae*** — the dominant field species and the hardest fresh case.
-- **~15% *Ae. aegypti* in the missing condition (fresh field)** — Aedes looks easy now *only* because all current Aedes is one condition; the other condition will fail the same way stephensi does today. Collect it before it becomes a field surprise.
+- **~15% *Ae. aegypti* in its missing condition (fresh field)** — Aedes only *looks* easy today because every Aedes we have is one condition. The other condition will fail exactly like stephensi does now. Collect it before it bites us in production.
 - **~10% dried controls** across species.
 
-Plus two capture-quality requirements, because image quality is itself part of the gap: photograph the **same specimen on multiple phones** (so the model learns the mosquito, not the camera), take **more angles per specimen** (Kenya currently averages ~1.6 images vs ~20 in the lab), and minimize squishing and damage so wings stay visible. Specimens too damaged or blurry to read should be flagged for expert review rather than force-classified.
+And two capture-quality asks, because image quality is half the gap: shoot the **same specimen on multiple phones** (so the model learns the mosquito, not the camera), take **more angles per specimen** (Kenya averages ~1.6 shots vs ~20 in the lab), and handle specimens gently enough that the wings survive. Anything too damaged or blurry to read should go to a human, not get a forced guess.
 
 ---
 
-*Reproducibility: the repository contains the full pipeline (data preparation → training → evaluation), both model checkpoints (insectary-only and insectary+Kenya), the exact Kenya split CSVs, and the run logs — so every number above can be regenerated on your machine.*
+*Everything here reproduces: the repo has the full pipeline (prep → train → evaluate), both checkpoints (insectary-only and insectary+Kenya), the exact Kenya split files, and the run logs. Detail on the dataset, training setup, experiment tracking, and the app is in the README.*
