@@ -1,0 +1,92 @@
+device: cuda | model: efficientvit_b0 | kenya_frac: 0.5
+
+insectary train: 3434 imgs / 134 spec
+kenya_train: 376 imgs / 230 spec
+kenya_test : 377 imgs / 231 spec
+kenya_test species: {'anopheles_gambiae': np.int64(173), 'anopheles_stephensi': np.int64(134), 'aedes_aegypti': np.int64(70)}
+no kenya specimen leakage  ✓
+
+=======================================================
+BASELINE: train on INSECTARY ONLY
+=======================================================
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+  ep 1 val_macroF1=0.5135
+  ep 2 val_macroF1=0.7838
+  ep 3 val_macroF1=0.7606
+  ep 4 val_macroF1=0.8892
+  ep 5 val_macroF1=0.9692
+  ep 6 val_macroF1=0.9517
+  ep 7 val_macroF1=0.9477
+  ep 8 val_macroF1=0.9198
+  ep 9 val_macroF1=0.9728
+  ep10 val_macroF1=0.9703
+  ep11 val_macroF1=0.9656
+  ep12 val_macroF1=0.9796
+  ep13 val_macroF1=0.9724
+  ep14 val_macroF1=0.9795
+  ep15 val_macroF1=0.9794
+  ep16 val_macroF1=0.9761
+  ep17 val_macroF1=0.9779
+  ep18 val_macroF1=0.9717
+  early stop
+
+### BASELINE (insectary only)  ->  kenya_test macro-F1 = 0.6484
+                     precision    recall  f1-score   support
+
+      aedes_aegypti      0.924     0.871     0.897        70
+  anopheles_gambiae      0.565     0.549     0.557       173
+anopheles_stephensi      0.476     0.507     0.491       134
+
+           accuracy                          0.594       377
+          macro avg      0.655     0.643     0.648       377
+       weighted avg      0.600     0.594     0.597       377
+
+
+=======================================================
+AUGMENTED: train on INSECTARY + KENYA_TRAIN
+=======================================================
+  ep 1 val_macroF1=0.3409
+  ep 2 val_macroF1=0.6927
+  ep 3 val_macroF1=0.9569
+  ep 4 val_macroF1=0.7424
+  ep 5 val_macroF1=0.9146
+  ep 6 val_macroF1=0.9107
+  ep 7 val_macroF1=0.9688
+  ep 8 val_macroF1=0.8289
+  ep 9 val_macroF1=0.9327
+  ep10 val_macroF1=0.9651
+  ep11 val_macroF1=0.9711
+  ep12 val_macroF1=0.9810
+  ep13 val_macroF1=0.9663
+  ep14 val_macroF1=0.9674
+  ep15 val_macroF1=0.9732
+  ep16 val_macroF1=0.9725
+  ep17 val_macroF1=0.9778
+  ep18 val_macroF1=0.9688
+  early stop
+
+### AUGMENTED (insectary + kenya_train)  ->  kenya_test macro-F1 = 0.9550
+                     precision    recall  f1-score   support
+
+      aedes_aegypti      0.985     0.929     0.956        70
+  anopheles_gambiae      0.970     0.942     0.956       173
+anopheles_stephensi      0.923     0.985     0.953       134
+
+           accuracy                          0.955       377
+          macro avg      0.959     0.952     0.955       377
+       weighted avg      0.956     0.955     0.955       377
+
+
+=======================================================
+RESULT
+=======================================================
+kenya_test macro-F1  baseline (insectary only)      : 0.6484
+kenya_test macro-F1  augmented (+ kenya_train)       : 0.9550
+lift from adding 230 kenya specimens : +0.3066
+
+If lift is positive, field data helps -> supports the 2,000-image ask.
+
+saved checkpoints + splits to runs/:
+  efficientvit_b0_baseline_insectary.pt   (insectary only)
+  efficientvit_b0_augmented_kenya.pt       (insectary + kenya_train)
+  kenya_test_split.csv / kenya_train_split.csv

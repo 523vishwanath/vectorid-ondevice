@@ -1,0 +1,40 @@
+<svg width="100%" viewBox="0 0 680 470" xmlns="http://www.w3.org/2000/svg" role="img" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif">
+<title>VectorCam specimen-to-prediction pipeline</title>
+<desc>A specimen photo is captured on a phone, cropped to the mosquito on-device, classified on-device, then either accepted if confident or routed to expert review if uncertain.</desc>
+<defs><marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker></defs>
+<style>
+.t{font-size:14px;font-weight:600;fill:#1a1a2e}.ts{font-size:12px;fill:#555}.dash{fill:none;stroke-dasharray:4 4}
+</style>
+<text class="t" x="40" y="30">On-device (phone, offline after first load)</text>
+<rect x="40" y="42" width="600" height="150" rx="14" fill="none" stroke="#1D9E75" stroke-width="1" stroke-dasharray="5 4"/>
+<!-- capture -->
+<rect x="60" y="90" width="130" height="56" rx="8" fill="#F1EFE8" stroke="#5F5E5A" stroke-width="0.5"/>
+<text class="t" x="125" y="114" text-anchor="middle">Capture</text><text class="ts" x="125" y="132" text-anchor="middle">Phone photo</text>
+<!-- crop -->
+<rect x="240" y="90" width="130" height="56" rx="8" fill="#E1F5EE" stroke="#0F6E56" stroke-width="0.5"/>
+<text class="t" x="305" y="114" text-anchor="middle" fill="#085041">Localize + crop</text><text class="ts" x="305" y="132" text-anchor="middle" fill="#0F6E56">u2netp, ~5 MB</text>
+<!-- classify -->
+<rect x="420" y="90" width="130" height="56" rx="8" fill="#EEEDFE" stroke="#534AB7" stroke-width="0.5"/>
+<text class="t" x="485" y="114" text-anchor="middle" fill="#3C3489">Classify</text><text class="ts" x="485" y="132" text-anchor="middle" fill="#534AB7">EfficientViT-B0</text>
+<!-- output -->
+<rect x="570" y="90" width="52" height="56" rx="8" fill="#EEEDFE" stroke="#534AB7" stroke-width="0.5"/>
+<text class="ts" x="596" y="114" text-anchor="middle" fill="#3C3489">3 sp.</text><text class="ts" x="596" y="132" text-anchor="middle" fill="#3C3489">+ conf</text>
+<line x1="190" y1="118" x2="236" y2="118" stroke="#5F5E5A" stroke-width="1.5" marker-end="url(#arrow)"/>
+<line x1="370" y1="118" x2="416" y2="118" stroke="#5F5E5A" stroke-width="1.5" marker-end="url(#arrow)"/>
+<line x1="550" y1="118" x2="566" y2="118" stroke="#5F5E5A" stroke-width="1.5" marker-end="url(#arrow)"/>
+<!-- confidence gate -->
+<rect x="270" y="242" width="140" height="56" rx="8" fill="#FAEEDA" stroke="#854F0B" stroke-width="0.5"/>
+<text class="t" x="340" y="266" text-anchor="middle" fill="#633806">Confidence check</text><text class="ts" x="340" y="284" text-anchor="middle" fill="#854F0B">Threshold gate</text>
+<path d="M485 146 L485 270 L412 270" fill="none" stroke="#5F5E5A" stroke-width="1.5" marker-end="url(#arrow)"/>
+<!-- accept -->
+<rect x="60" y="350" width="200" height="56" rx="8" fill="#E1F5EE" stroke="#0F6E56" stroke-width="0.5"/>
+<text class="t" x="160" y="374" text-anchor="middle" fill="#085041">Accept prediction</text><text class="ts" x="160" y="392" text-anchor="middle" fill="#0F6E56">Confident: logged to survey</text>
+<!-- review -->
+<rect x="420" y="350" width="200" height="56" rx="8" fill="#FAECE7" stroke="#993C1D" stroke-width="0.5"/>
+<text class="t" x="520" y="374" text-anchor="middle" fill="#712B13">Expert review</text><text class="ts" x="520" y="392" text-anchor="middle" fill="#993C1D">Uncertain: human decides</text>
+<path d="M300 298 L160 298 L160 348" fill="none" stroke="#5F5E5A" stroke-width="1.5" marker-end="url(#arrow)"/>
+<text class="ts" x="205" y="290" text-anchor="middle">confident</text>
+<path d="M380 298 L520 298 L520 348" fill="none" stroke="#5F5E5A" stroke-width="1.5" marker-end="url(#arrow)"/>
+<text class="ts" x="475" y="290" text-anchor="middle">uncertain</text>
+<text class="t" x="420" y="336" fill="#712B13">Human in the loop</text>
+</svg>
