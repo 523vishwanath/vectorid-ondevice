@@ -2,7 +2,7 @@
 
 **Vishwanath Ninganolla** · Assistant Research Engineer assessment · July 2026
 
-> **A note on the numbers:** every performance figure in this document is a **macro-F1 score** unless I state otherwise. F1 blends precision (few false alarms) and recall (few missed cases) into one number from 0 to 1; "macro" means I average it across all three species equally, so the model can't hide a failure on the rare, important species behind success on the common one. A fuller plain-English guide to the metrics is in the [README](README.md#2-a-one-minute-guide-to-the-metrics-read-this-first).
+> **A note on the numbers:** every performance figure in this document is a **macro-F1 score** unless I state otherwise. F1 blends precision (few false alarms) and recall (few missed cases) into one number from 0 to 1; "macro" means I average it across all three species equally, so the model can't hide a failure on the rare, important species behind success on the common one. A fuller guide to the metrics is in the [README](README.md#2-a-one-minute-guide-to-the-metrics-read-this-first).
 
 ---
 
