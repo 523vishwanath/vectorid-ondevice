@@ -2,11 +2,11 @@
 
 **Vishwanath Ninganolla** · Assistant Research Engineer assessment · July 2026
 
-> **A note on the numbers:** every performance figure in this document is a **macro-F1 score** unless I state otherwise. F1 blends precision (few false alarms) and recall (few missed cases) into one number from 0 to 1; "macro" means I average it across all three species equally, so the model can't hide a failure on the rare, important species behind success on the common one. A fuller guide to the metrics is in the [README](README.md#2-a-one-minute-guide-to-the-metrics-read-this-first).
+> **A note on the numbers:** every performance figure in this document is a **macro-F1 score** unless I state otherwise. F1 blends precision (few false alarms) and recall (few missed cases) into one number from 0 to 1; "macro" means I average it across all three species equally, so the model can't hide a failure on the rare, important species behind success on the common one. A fuller plain-English guide to the metrics is in the [README](README.md#2-a-one-minute-guide-to-the-metrics-read-this-first).
 
 ---
 
-## My call: not ready to deploy this quarter — but the fix is clear.
+## My call: no-go this quarter. The model isn't the problem — missing field data is, and it's fixable.
 
 **The number I stake it on: a macro-F1 of 0.65 on Kenya field photos the model has never seen.**
 
@@ -53,7 +53,7 @@ Lab → Kenya is not an arbitrary choice — it *is* the deployment: a lab-built
 | *An. stephensi* | ~100% fresh | ~100% dried |
 | *An. gambiae* | mostly dried | ~100% fresh |
 
-The model is always graded on the version of each species it saw *least*. That is exactly why *An. stephensi* is the worst class — there are **zero dried stephensi in training**, and every Kenya stephensi is dried. Inspecting the images adds the second half of the story: Kenya specimens are often squished, broken, or blurry, with the wings — where the *Anopheles* differences live — obscured or gone. So the field gap is condition reversal plus real image-quality loss. Both are coverage problems, and both are fixable by collecting the right images.
+The model is always graded on the version of each species it saw *least*. That is exactly why *An. stephensi* is the worst class — there are **zero dried stephensi in training**, and every Kenya stephensi is dried. Inspecting the images adds the second half of the story. The Kenya field specimens are physically in worse shape than the lab ones: many are **squished with the body folded over rather than spread out**, so the legs and abdomen are bunched together instead of laid flat; some have **body parts that aren't intact**; and a number are simply **blurry**. Because the mosquito isn't spread open, the wings — where the fine differences between the two *Anopheles* live — are frequently folded under, obscured, or damaged. A lab specimen is posed and pristine; a field specimen is whatever survived the trap and the handling. So the field gap is condition reversal plus real image-quality loss. Both are coverage problems, and both are fixable by collecting the right images.
 
 **A telling detail — even the "control" species fails.** *An. gambiae* is the one species that trained on **both** fresh and dried, and Kenya tests it on fresh — a condition it *did* see in training. If the condition reversal were the whole story, gambiae should do fine. Yet its Kenya F1 is still only **0.56**. That is the clincher: it means the field gap is not *only* about fresh vs dried. Even with the right condition covered, a different environment — different phones, backgrounds, specimen handling, and image quality in Kenya versus the lab — still drags performance down. This is why the fix is not just "cover both conditions" but "train on real field data, and always keep a separate, held-out field test set to measure honestly." Condition coverage is necessary; field data is what actually closes the gap.
 
