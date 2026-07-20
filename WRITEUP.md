@@ -6,7 +6,7 @@
 
 ---
 
-## My call: not this quarter.
+## My call: not ready to deploy this quarter — but the fix is clear.
 
 **The number I stake it on: a macro-F1 of 0.65 on Kenya field photos the model has never seen.**
 
@@ -55,6 +55,8 @@ Lab → Kenya is not an arbitrary choice — it *is* the deployment: a lab-built
 
 The model is always graded on the version of each species it saw *least*. That is exactly why *An. stephensi* is the worst class — there are **zero dried stephensi in training**, and every Kenya stephensi is dried. Inspecting the images adds the second half of the story: Kenya specimens are often squished, broken, or blurry, with the wings — where the *Anopheles* differences live — obscured or gone. So the field gap is condition reversal plus real image-quality loss. Both are coverage problems, and both are fixable by collecting the right images.
 
+**A telling detail — even the "control" species fails.** *An. gambiae* is the one species that trained on **both** fresh and dried, and Kenya tests it on fresh — a condition it *did* see in training. If the condition reversal were the whole story, gambiae should do fine. Yet its Kenya F1 is still only **0.56**. That is the clincher: it means the field gap is not *only* about fresh vs dried. Even with the right condition covered, a different environment — different phones, backgrounds, specimen handling, and image quality in Kenya versus the lab — still drags performance down. This is why the fix is not just "cover both conditions" but "train on real field data, and always keep a separate, held-out field test set to measure honestly." Condition coverage is necessary; field data is what actually closes the gap.
+
 ---
 
 ## The proof that data closes it
@@ -79,7 +81,11 @@ The experiment that turns "I think it's the data" into "it's the data." Split Ke
 
 I built a working on-device demo to prove the edge story isn't hypothetical: a browser app ([live here](https://523vishwanath.github.io/vectorid-ondevice/)) running the model via ONNX Runtime Web, fully offline after first load and installable as an app, with low-confidence and low-margin predictions declined rather than forced — because the model has no "not a mosquito" class, and pretending otherwise in the field would be dangerous.
 
-**One picture of the whole flow** — capture to prediction, where the computing happens, and where a person steps in — is in [`architecture_diagram.svg`](architecture_diagram.svg).
+**One picture of the whole flow** — capture to prediction, where the computing happens, and where a person steps in:
+
+![System architecture](architecture_diagram.png)
+
+A field officer takes the photo (person, in the field), the phone crops and classifies it, and a confidence gate decides: confident results are logged automatically, while uncertain ones go to a human entomologist for review — and those corrections feed back into future training.
 
 ---
 
@@ -99,5 +105,7 @@ I built a working on-device demo to prove the edge story isn't hypothetical: a b
 And two capture-quality asks, because image quality is half the gap: shoot the **same specimen on multiple phones** (so the model learns the mosquito, not the camera), take **more angles per specimen** (Kenya averages ~1.6 shots vs ~20 in the lab), and handle specimens gently enough that the wings survive. Anything too damaged or blurry to read should go to a human, not get a forced guess.
 
 ---
+
+**Environment.** Training ran on an NVIDIA RTX 5090 (RunPod), with Google Colab for data prep and export. Core stack: Python 3.11, PyTorch 2.x, timm, ONNX / ONNX Runtime Web, scikit-learn, and Comet ML for tracking. The full pinned list is in `scripts/requirements.txt`.
 
 *Everything here reproduces: the repo has the full pipeline (prep → train → evaluate), both checkpoints (lab-only and lab+Kenya), the exact Kenya split files, and the run logs. Detail on the dataset, training setup, experiment tracking, error analysis, and the app is in the [README](README.md).*

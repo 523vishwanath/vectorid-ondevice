@@ -211,7 +211,7 @@ A working demo that runs the classifier **entirely in the phone's browser** — 
 - **Android (Chrome):** open the link → tap the ⋮ menu → "Add to Home screen" / "Install app."
 - **iPhone (Safari):** open the link → tap the Share button → "Add to Home Screen."
 
-Once installed, it opens full-screen from your home screen and runs even in airplane mode.
+Once installed, it opens full-screen from your home screen and runs even in airplane mode. **Note:** this is a web app added directly from the browser — it is **not** on the Apple App Store or Google Play, and doesn't need to be. Installing from the browser is how progressive web apps (PWAs) work.
 
 **This app is an early demo and needs a lot more work before field use** — a better on-device crop (real segmentation instead of a simple resize), more reliable inference across phone types, a true "not a mosquito" detector, and the field-data retraining described above. It's here to prove the on-device, offline approach works end to end — not as a finished product.
 
@@ -221,9 +221,9 @@ Once installed, it opens full-screen from your home screen and runs even in airp
 
 One picture of how a photo flows from capture to a final answer, showing where the computing happens (all on the phone) and where a human steps in (uncertain cases go to an expert).
 
-**[View the architecture diagram »](architecture_diagram.svg)** · [simpler version](system_diagram.svg)
+![System architecture](architecture_diagram.png)
 
-In short: **photo → crop to the mosquito → classify (on the phone) → confidence check → confident results are logged, uncertain ones go to an expert.**
+The diagram shows three phases. **Build** (done once, offline): clean and split the data, crop to the mosquito with U2Net, train and evaluate. **Field use** (on the phone, offline): a **field officer** captures a photo, and the phone crops, classifies, and runs a confidence check. **Decision** (where a person enters the loop): confident results are logged to the survey automatically, while uncertain ones go to a **human entomologist** for review — and those expert corrections feed back into future training.
 
 ---
 
@@ -247,6 +247,16 @@ In short: **photo → crop to the mosquito → classify (on the phone) → confi
 - **~15% fresh field *Aedes aegypti*** — Aedes only *looks* easy today because all our Aedes is one condition; the other condition will fail just like stephensi does now. Collect it before it becomes a field surprise.
 - **~10% dried controls** across species.
 - Plus: photograph the **same specimen on multiple phones**, take **more angles per specimen** (Kenya averages ~1.6 shots vs ~20 in the lab), and handle specimens gently so the wings survive.
+
+---
+
+## 12b. Environment specification
+
+- **Language:** Python 3.11
+- **Core libraries:** PyTorch 2.x, timm, scikit-learn, numpy, pandas, Pillow, opencv-python, matplotlib, onnx, onnxruntime, comet-ml, pytorch-grad-cam
+- **Training hardware:** NVIDIA RTX 5090 (RunPod); Google Colab for data prep and ONNX export
+- **On-device runtime:** ONNX Runtime Web (WASM) in the browser
+- **Full pinned versions:** [`scripts/requirements.txt`](scripts/requirements.txt)
 
 ---
 
@@ -285,6 +295,14 @@ The trained checkpoints in `runs/` reproduce every reported number directly, and
 
 ## 14. Tools used
 
+![PyTorch](https://img.shields.io/badge/PyTorch-EE4C2C?logo=pytorch&logoColor=white)
+![ONNX](https://img.shields.io/badge/ONNX-005CED?logo=onnx&logoColor=white)
+![scikit-learn](https://img.shields.io/badge/scikit--learn-F7931E?logo=scikitlearn&logoColor=white)
+![Comet](https://img.shields.io/badge/Comet_ML-262c3e?logo=cometml&logoColor=white)
+![Python](https://img.shields.io/badge/Python_3.11-3776AB?logo=python&logoColor=white)
+![Colab](https://img.shields.io/badge/Google_Colab-F9AB00?logo=googlecolab&logoColor=white)
+![GitHub Pages](https://img.shields.io/badge/GitHub_Pages-222?logo=github&logoColor=white)
+
 - **[PyTorch](https://pytorch.org/)** + **[timm](https://github.com/huggingface/pytorch-image-models)** — model training (EfficientViT, EfficientNet, MobileNet, ConvNeXt)
 - **[U2Net](https://github.com/xuebinqin/U-2-Net)** — segmentation to crop the mosquito
 - **[grad-cam](https://github.com/jacobgil/pytorch-grad-cam)** — visualizing what the model looks at
@@ -293,7 +311,7 @@ The trained checkpoints in `runs/` reproduce every reported number directly, and
 - **[ONNX](https://onnx.ai/) + [ONNX Runtime Web](https://onnxruntime.ai/docs/tutorials/web/)** — running the model on-device in the browser
 - **[RunPod](https://www.runpod.io/)** (NVIDIA RTX 5090) + **[Google Colab](https://colab.research.google.com/)** — training and data prep
 - **[GitHub Pages](https://pages.github.com/)** — hosting the live app
-- **[Working data notes (Google Sheet)](https://docs.google.com/spreadsheets)** — interactive tracking of drops, conditions, and split decisions
+- **[Working data notes (interactive Google Sheet)](https://docs.google.com/spreadsheets/d/1ix5zJ798hJ0LRjXUywEBlwIQLs0iYy_VYxByJaPNUiM/edit?gid=0#gid=0)** — tracking of drops, conditions, and split decisions
 
 ---
 
