@@ -127,13 +127,13 @@ The raw photos are not just a mosquito. Each frame includes the **tray edges** a
 
 To stop that, every training image is passed through a **U2Net segmentation** step that masks out everything except the mosquito, then crops tight to it. The classifier only ever sees a clean insect on a blank background, so it is forced to learn wing, leg, and body **morphology** — the actual features that separate the species — rather than the tray or the ID sticker.
 
-**Raw capture (tray edges + specimen ID visible):**
-
-![Raw specimen image with tray and ID label](results/raw_specimen_example.jpg)
-
-**After U2Net segmentation (clean mosquito, background removed) — this is what the model trains on:**
-
-![U2Net-segmented mosquito crop used for training](results/segmented_specimen_example.jpg)
+<table>
+  <tr align="center">
+    <td><img src="results/raw_specimen_example.jpg" width="240" alt="Raw capture with tray edges and specimen ID label"><br><sub><b>Raw capture</b> — tray edges + specimen ID visible</sub></td>
+    <td><h1>&rarr;</h1><sub>U2Net<br>segment</sub></td>
+    <td><img src="results/segmented_specimen_example.jpg" width="240" alt="U2Net-segmented clean mosquito crop"><br><sub><b>Segmented crop</b> — what the model trains on</sub></td>
+  </tr>
+</table>
 
 This is a deliberate design choice, not just tidiness: removing the tray and ID label is what makes the model attend to the mosquito itself, and it is what improved the unseen-phone score from 0.89 to 0.92 (Section 7, Step 3).
 
@@ -275,9 +275,9 @@ Once installed, it opens full-screen from your home screen and runs even in airp
 
 One picture of how a photo flows from capture to a final answer, showing where the computing happens (all on the phone) and where a human steps in (uncertain cases go to an expert).
 
-![System architecture](architecture_diagram.png)
+![System architecture](architecture_diagram.svg)
 
-The diagram shows three phases. **Build** (done once, offline): clean and split the data, crop to the mosquito with U2Net, train and evaluate. **Field use** (on the phone, offline): a **field officer** captures a photo, and the phone crops, classifies, and runs a confidence check. **Decision** (where a person enters the loop): confident results are logged to the survey automatically, while uncertain ones go to a **human entomologist** for review — and those expert corrections feed back into future training.
+The diagram shows three phases. **Build** (done once, offline): clean and split the data, segment to the mosquito with U2Net, train and evaluate EfficientViT-B0. **Field use** (on the phone, offline): a **field officer** captures a photo; a **YOLOv8n detector** finds and crops the mosquito (with a zoomed center-crop retry, and a re-take prompt if both passes miss); the crop is classified and run through a confidence check. **Decision** (where a person enters the loop): confident results are logged to the survey automatically, while uncertain ones — where the top two species are within 40 points — go to a **human entomologist** for review, and those corrections feed back into future training.
 
 ---
 
@@ -402,8 +402,8 @@ The trained checkpoints in `runs/` reproduce every reported number directly, and
 │   ├── kenya_field_data_effect.png # the +0.31 improvement (3 seeds)
 │   ├── cm_baseline.png / cm_augmented.png   # confusion matrices
 │   ├── gradcam_baseline.png        # the model attends to the mosquito
-│   ├── raw_specimen_example.png    # raw capture: tray edges + specimen ID visible
-│   ├── segmented_specimen_example.png  # U2Net crop the classifier trains on
+│   ├── raw_specimen_example.jpg    # raw capture: tray edges + specimen ID visible
+│   ├── segmented_specimen_example.jpg  # U2Net crop the classifier trains on
 │   └── app_pipeline_diagram.svg    # in-app detect → zoom retry → classify flow
 │
 └── index.html, vectorcam.onnx, vectorcam_detector.onnx, sw.js, manifest.json, icon-*.png   # the live on-device app (classifier + YOLO detector)
