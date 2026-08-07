@@ -1,6 +1,6 @@
 # VectorID — A Field-Deployable Mosquito Species Classifier
 
-A phone tool that looks at a photo of a mosquito and tells you which of three species it is: *Aedes aegypti*, *Anopheles gambiae*, or the invasive *Anopheles stephensi*. Built for malaria vector surveillance in Kenya, where it needs to run on cheap phones with little or no internet.
+A phone tool that looks at a photo of a mosquito and tells you which of three species it is: *Aedes aegypti*, *Anopheles gambiae*, or the invasive *Anopheles stephensi*. It first **detects and crops** the mosquito with an on-device YOLOv8n detector, then **classifies** the crop with an EfficientViT model — both running in the phone browser. Built for malaria vector surveillance in Kenya, where it needs to run on cheap phones with little or no internet.
 
 > **The honest bottom line:** on real Kenya field photos the model scores **0.65 (macro-F1)** — not good enough to deploy this quarter. But I found *why*, and the fix is clear: the problem is missing field data, not the model. Adding a small amount of Kenya data to training raises the field score by **+0.31**. Full reasoning in **[WRITEUP.md](WRITEUP.md)**.
 
@@ -23,6 +23,7 @@ A phone tool that looks at a photo of a mosquito and tells you which of three sp
 7. [Error analysis — the story of how I found the real problem](#7-error-analysis--how-i-found-the-real-problem)
 8. [The proof that data closes the gap](#8-the-proof-that-data-closes-the-gap)
 9. [The model and edge deployment](#9-the-model-and-edge-deployment)
+9b. [The detector — finding the mosquito before classifying](#9b-the-detector--finding-the-mosquito-before-classifying)
 10. [The live app](#10-the-live-app-vectorid)
 11. [System architecture](#11-system-architecture)
 12. [Limitations and next steps](#12-limitations-and-next-steps)
@@ -120,6 +121,22 @@ Before trusting the data, I checked it for problems and found one that mattered:
 
 Photos with no label at all were dropped, not guessed. After cleaning, **no specimen belongs to more than one species.**
 
+### Segmenting to the mosquito — what the classifier actually trains on
+
+The raw photos are not just a mosquito. Each frame includes the **tray edges** and a printed **specimen ID label** sitting right next to the insect. If the classifier trains on the full frame, it can learn to read those props instead of the mosquito — which is exactly the background "shortcut" Grad-CAM later caught (Section 7).
+
+To stop that, every training image is passed through a **U2Net segmentation** step that masks out everything except the mosquito, then crops tight to it. The classifier only ever sees a clean insect on a blank background, so it is forced to learn wing, leg, and body **morphology** — the actual features that separate the species — rather than the tray or the ID sticker.
+
+**Raw capture (tray edges + specimen ID visible):**
+
+![Raw specimen image with tray and ID label](results/raw_specimen_example.jpg)
+
+**After U2Net segmentation (clean mosquito, background removed) — this is what the model trains on:**
+
+![U2Net-segmented mosquito crop used for training](results/segmented_specimen_example.jpg)
+
+This is a deliberate design choice, not just tidiness: removing the tray and ID label is what makes the model attend to the mosquito itself, and it is what improved the unseen-phone score from 0.89 to 0.92 (Section 7, Step 3).
+
 ---
 
 ## 6. How the evaluation was set up
@@ -185,9 +202,34 @@ The invasive target, *An. stephensi*, jumped from **0.49 to 0.95**. *An. gambiae
 
 **Recommended model: EfficientViT-B0.** It's **8.5 MB** and runs in about **6 milliseconds per image** — small and fast enough for the cheap phones field teams already carry. MobileNetV3 (6 MB) is a backup if a target phone struggles with the newer model's operations.
 
-The classifier runs fully offline. The one requirement: the crop step must also run on the phone and must match the training crop. For a low-connectivity phone that means either a tiny on-device segmenter (u2netp, ~5 MB) or aligning with the app's existing camera framing.
+The classifier runs fully offline. The one requirement: the crop step must also run on the phone. In the live app this is now handled by the on-device **YOLOv8n detector** (Section 9b), which locates and crops the mosquito before classification. The remaining gap is that the detector produces a **bounding-box crop**, while the classifier trained on **U2Net segmentation** masks — so the ideal next step is a tiny on-device segmenter (u2netp, ~5 MB) to make the on-phone crop match training exactly.
 
 **Why deploying only a well-tested model matters.** This tool decides public-health responses. If it wrongly says "no stephensi here," a real invasive outbreak could be missed. If it raises false alarms, resources get wasted. A high lab score means nothing if it doesn't hold in the field. That's the entire reason I report the honest 0.65 and recommend *no-go* — deploying a model that looks good but fails on the field's hardest, most important case would do real harm. A good "no, not yet, and here's the fix" is far more valuable than an impressive number that collapses in the real world.
+
+---
+
+## 9b. The detector — finding the mosquito before classifying
+
+The classifier only works well on a tight crop of the mosquito. In the app, that crop is produced by a **YOLOv8n object detector** that runs first and locates the insect. A few things about it are worth being explicit on, because they affect how the numbers should be read.
+
+**What the detector was trained on — and what it was *not*.** The YOLOv8n detector was trained on a **mosquito detection dataset from Roboflow Universe**, *not* on the VectorCam insectary or Kenya field images. It has never seen a single specimen from the drops this project is built around. So the detector and the classifier come from **different data worlds**: the detector knows "what a mosquito looks like" in general, while the classifier knows the specific insectary specimens. This matters for interpreting misses (below).
+
+**Two detectors, tested on Kenya field images.** I compared two detector backbones on the Kenya field set, at a detection confidence of **0.23**:
+
+| Detector | Mosquitoes missed on Kenya field images |
+|---|---|
+| YOLO26n | **16 missed** |
+| **YOLOv8n** | **4 missed** |
+
+YOLOv8n was the clear winner — four times fewer misses on the exact images that matter, so it's the detector shipped in the app.
+
+**Why YOLOv8n still missed 4 — and why that's expected.** The four misses are not a bug; they follow directly from the training-data mismatch:
+
+- **The detector never trained on insectary or field images.** It learned from general Roboflow Universe mosquito photos. Kenya field specimens look different — different phones, lighting, trays, and often **damaged, dried, squished, or blurry** specimens (the same field-quality problem that hurts the classifier, Section 7). A detector that never saw these conditions will occasionally fail to recognize the mosquito as one.
+- **Domain gap, not capacity.** Just like the classifier, this is a *coverage* problem: the detector is being asked to generalize to a domain outside its training distribution. The fix is the same in spirit — a handful of labelled field images to fine-tune the detector would likely erase most of the remaining misses.
+- **The app is built to absorb these misses.** This is exactly why the app runs a **second detection pass on a 65% center-crop zoom**, and why it asks for a **re-take** rather than guessing when both passes fail. The 4-miss number is a single-pass offline measurement; the app's two-pass strategy plus re-take is designed so a first-pass miss doesn't become a wrong answer.
+
+**A note on thresholds — two different numbers for two different jobs.** The comparison above uses **0.23** because that's the operating point where I measured raw single-pass recall on Kenya offline. The **app uses 0.50** on both passes, a deliberately stricter gate: in the app I'd rather reject a weak detection and ask for a cleaner photo (the center-zoom retry plus re-take handles the misses) than accept a shaky box. Different context, different threshold — the offline test is measuring the detector's ceiling, the app is choosing a safe operating point.
 
 ---
 
@@ -197,15 +239,27 @@ A working demo that runs the classifier **entirely in the phone's browser** — 
 
 **Live link:** [523vishwanath.github.io/vectorid-ondevice](https://523vishwanath.github.io/vectorid-ondevice/)
 
-**How it works:**
+**How it works — a two-model pipeline, both running in the browser:**
+
+The app now runs **two** models in sequence, fully on-device. A **YOLOv8n detector** first finds and crops the mosquito, then the **EfficientViT classifier** identifies the species from that crop. The detector replaces the old naive full-frame resize — instead of hoping the mosquito is centered, the app locates it and hands the classifier a tight crop, which is much closer to the segmented images the classifier trained on.
+
 1. You take a photo or upload one (or several).
-2. The image is prepared in the browser (resized and normalized, matching training) and run through the model using **ONNX Runtime Web**.
-3. It shows the predicted species, the confidence, the probability for each species, and the exact image the model saw.
+2. **Detection (pass 1).** The full image goes to the YOLOv8n detector at a **confidence threshold of 0.50**. If it finds a mosquito, the app crops to that box (with a little padding for wings and legs).
+3. **Detection (pass 2), only if pass 1 finds nothing.** The app takes the **middle 65% of the image** — a zoomed-in view of the center, where the specimen usually sits — and runs the detector again at the **same 0.50 threshold**. Zooming makes a small or partly-missed mosquito larger in frame, giving the detector a second, better chance.
+4. **Classification.** If either pass found a mosquito, the crop is prepared in the browser (resized and normalized, matching training) and run through the classifier using **ONNX Runtime Web**. It shows the predicted species, the confidence, the probability for each species, and the exact crop the model saw.
+5. **Re-take on double miss.** If **both** detection passes fail, the app does **not** classify. It asks you to re-take the photo. This is deliberate: the classifier has no "not a mosquito" class, so feeding it a mosquito-less image would force a false species. Two honest tries, then re-shoot.
+
+Throughout, a small **loading indicator names the current step** for each specimen — "Detecting…", "Re-detecting center…", or "Classifying…" — so it's clear where each image is in the pipeline.
+
+**The in-app pipeline, end to end:**
+
+![VectorID app detect-then-classify pipeline](results/app_pipeline_diagram.svg)
 
 **Honest safeguards built in:**
-- **"No confident match" rejection.** The model has no "not a mosquito" option, so if you show it a selfie it would otherwise force a guess. The app declines to report a result when confidence is low *or* when there's no clear winner — so junk images don't get labelled as mosquitoes.
-- **Expert-review flag** for borderline cases.
-- **True offline.** A service worker caches the app and model, so it works with no connection and can be installed like a real app.
+- **Detector-gated input.** Because the YOLO detector must find a mosquito before anything gets classified, non-mosquito images (a selfie, a blank tray) are rejected at the detection stage rather than forced into a species guess.
+- **"No confident match" rejection at classification.** Even after a valid detection, the app declines to report a species when the classifier's confidence is low *or* when there's no clear winner.
+- **Expert-review flag for borderline cases.** When the top two species are too close to call — specifically, when the gap between the #1 and #2 species probabilities is **40 percentage points or less** — the app flags the specimen for expert review instead of asserting a confident answer. A near-tie between the two *Anopheles* is exactly the dangerous case, so the app surfaces it rather than guessing.
+- **True offline.** A service worker caches the app and **both** models, so the full detect-then-classify pipeline works with no connection and can be installed like a real app.
 
 **How to install it on your phone (works offline afterward):**
 - **Android (Chrome):** open the link → tap the ⋮ menu → "Add to Home screen" / "Install app."
@@ -213,7 +267,7 @@ A working demo that runs the classifier **entirely in the phone's browser** — 
 
 Once installed, it opens full-screen from your home screen and runs even in airplane mode. **Note:** this is a web app added directly from the browser — it is **not** on the Apple App Store or Google Play, and doesn't need to be. Installing from the browser is how progressive web apps (PWAs) work.
 
-**This app is an early demo and needs a lot more work before field use** — a better on-device crop (real segmentation instead of a simple resize), more reliable inference across phone types, a true "not a mosquito" detector, and the field-data retraining described above. It's here to prove the on-device, offline approach works end to end — not as a finished product.
+**This app is an early demo and needs a lot more work before field use.** The YOLO detector is a real step up from the old full-frame resize — it locates and crops the mosquito on-device — but it is a **bounding-box crop, not the U2Net segmentation** the classifier trained on, so the crop still carries some background the training images didn't. Closing that gap (running a tiny segmenter on the phone so the crop matches training exactly), more reliable inference across phone types, and the field-data retraining described above are the remaining work. It's here to prove the on-device, offline detect-then-classify approach works end to end — not as a finished product.
 
 ---
 
@@ -232,8 +286,9 @@ The diagram shows three phases. **Build** (done once, offline): clean and split 
 **Honest limitations:**
 - Field performance (0.65) is not deployable yet; the two *Anopheles* are not reliably separable.
 - The lab data lacks whole condition/species combinations (no dried stephensi, no dried aedes).
-- The app uses a simple crop, not true segmentation, so its predictions are weaker than the reported model.
-- No "not a mosquito" class — the confidence gate is a practical guard, not a real out-of-distribution detector.
+- The app crops with a YOLOv8n **bounding box**, not the U2Net **segmentation** the classifier trained on, so the on-device crop carries some background the training images didn't — its predictions are weaker than the reported (segmented) model.
+- The detector was trained on general Roboflow Universe mosquito images, not insectary/field data, so it occasionally misses hard field specimens (4 on the Kenya set); the two-pass zoom and re-take mitigate this but a field-fine-tuned detector would do better.
+- No "not a mosquito" class in the classifier itself. The YOLO detector gate plus the confidence check are practical guards that reject most junk, but they are not a true out-of-distribution detector.
 - Some field specimens are so damaged or blurry that no model could read them; those need a human.
 
 **Next, on the modelling side:**
@@ -346,9 +401,12 @@ The trained checkpoints in `runs/` reproduce every reported number directly, and
 │   ├── demo.gif                    # the app in action
 │   ├── kenya_field_data_effect.png # the +0.31 improvement (3 seeds)
 │   ├── cm_baseline.png / cm_augmented.png   # confusion matrices
-│   └── gradcam_baseline.png        # the model attends to the mosquito
+│   ├── gradcam_baseline.png        # the model attends to the mosquito
+│   ├── raw_specimen_example.png    # raw capture: tray edges + specimen ID visible
+│   ├── segmented_specimen_example.png  # U2Net crop the classifier trains on
+│   └── app_pipeline_diagram.svg    # in-app detect → zoom retry → classify flow
 │
-└── index.html, vectorcam.onnx, sw.js, manifest.json, icon-*.png   # the live on-device app
+└── index.html, vectorcam.onnx, vectorcam_detector.onnx, sw.js, manifest.json, icon-*.png   # the live on-device app (classifier + YOLO detector)
 ```
 
 ---
