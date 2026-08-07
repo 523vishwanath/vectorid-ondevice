@@ -184,7 +184,7 @@ const PRETTY={aedes_aegypti:"Aedes aegypti",anopheles_gambiae:"An. gambiae",anop
 const IMG=256,RESIZE=291,MEAN=[0.485,0.456,0.406],STD=[0.229,0.224,0.225],CONF=0.75;
 // --- detector (YOLO) settings ---
 const DET_SIZE=960;      // must match the imgsz you exported the onnx at
-const DET_CONF=0.40;     // box confidence: higher = rejects weak/junk detections, but may miss faint real mosquitoes
+const DET_CONF=0.50;     // box confidence for BOTH detector passes; higher rejects weak/junk detections
 const DET_IOU=0.7;       // NMS overlap threshold (unused for single-box, kept for reference)
 const DET_PAD=0.15;      // padding around the box before cropping (wings/legs)
 let session=null,detSession=null,items=[],idc=0;
@@ -232,20 +232,19 @@ function render(){
     const cropCell=it.stage
       ? '<div class="imgcell"><div class="spin"><span class="sp-ring"></span><span class="cap">'+stageLabel[it.stage]+'</span></div></div>'
       : it.crop
-      ? '<div class="imgcell model"><img src="'+it.crop+'" alt="Cropped region analysed for specimen '+(idx+1)+'"><span class="cap">'+(it.fallback?'Center region':'Detected crop')+'</span></div>'
+      ? '<div class="imgcell model"><img src="'+it.crop+'" alt="Cropped region analysed for specimen '+(idx+1)+'"><span class="cap">Detected crop</span></div>'
       : '<div class="imgcell"><img src="'+it.url+'" alt="" style="opacity:.22"><span class="cap">Crop pending</span></div>';
     let readout;
     if(it.noDetect){
-      readout='<div class="verdict"><span class="flag">⚑ No mosquito found — rescan</span></div>';
+      readout='<div class="verdict"><span class="flag">⚑ No mosquito found — please re-take the photo</span></div>';
     }else if(it.done){
       const p=it.probs,top=it.top,low=p[top]<CONF;
-      const fb=it.fallback?'<div class="verdict"><span class="flag">⚑ No detection — classified center region</span></div>':'';
       const head=low
         ? '<div class="verdict"><span class="flag">⚑ Flag for expert review</span><span class="pct">top: '+PRETTY[CLASSES[top]]+' '+(p[top]*100).toFixed(0)+'%</span></div>'
         : '<div class="verdict ok"><span class="sp">'+PRETTY[CLASSES[top]]+'</span><span class="pct">'+(p[top]*100).toFixed(0)+'% confidence</span></div>';
       const order=[0,1,2].sort((a,b)=>p[b]-p[a]);
       const bars=order.map(i=>'<div class="bar-row"><div class="bar-top"><span class="sp">'+PRETTY[CLASSES[i]]+'</span><span class="n">'+(p[i]*100).toFixed(1)+'%</span></div><div class="bar-track"><div class="bar-fill" style="width:'+(p[i]*100)+'%;background:'+fill(i,p,top)+'"></div></div></div>').join('');
-      readout=fb+head+bars+'<div class="meta">'+it.ms+' ms · processed on-device</div>';
+      readout=head+bars+'<div class="meta">'+it.ms+' ms · processed on-device</div>';
     }else readout='<div class="verdict pending">Queued — ready to identify</div>';
     el.innerHTML='<div class="specimen-head"><span class="name">SPECIMEN '+String(idx+1).padStart(2,'0')+'</span>'+
       '<button class="del" data-id="'+it.id+'" aria-label="Remove specimen '+(idx+1)+'"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M18 6L6 18M6 6l12 12"/></svg></button></div>'+
@@ -346,14 +345,13 @@ async function runAll(){
     const img=await loadImage(it.url);
 
     // --- pass 1: detector on the FULL image ---
-    it.stage='detecting';render();setStatus('Detecting…',true);
+    it.stage='detecting';it.noDetect=false;render();setStatus('Detecting…',true);
     let cropCanvas=await detectAndCrop(img);
 
-    // --- pass 2: detector on a 70% CENTER CROP if the first pass found nothing ---
-    let cc=null;
+    // --- pass 2: detector on a 65% CENTER CROP (zoomed view) if pass 1 found nothing ---
     if(!cropCanvas){
       it.stage='detecting2';render();setStatus('Re-detecting on center region…',true);
-      cc=centerCrop(img, 0.70);
+      const cc=centerCrop(img, 0.65);
       const ccImg=await loadImage(cc.toDataURL('image/jpeg'));
       cropCanvas=await detectAndCrop(ccImg);
     }
@@ -362,12 +360,12 @@ async function runAll(){
       // detector succeeded (pass 1 or 2) -> classify the detected crop
       it.stage='classifying';render();setStatus('Identifying…',true);
       await classify(it, cropCanvas);
-      it.fallback=false;it.stage=null;it.done=true;render();
+      it.stage=null;it.done=true;render();
     }else{
-      // detector failed twice -> classify the center crop directly (labelled)
-      it.stage='classifying';render();setStatus('Identifying center region…',true);
-      await classify(it, cc || centerCrop(img, 0.70));
-      it.fallback=true;it.stage=null;it.done=true;render();
+      // detector failed BOTH passes -> no mosquito found, ask for a new photo.
+      // do NOT classify: the classifier has no "not a mosquito" class and would
+      // force a false species onto a mosquito-less image.
+      it.stage=null;it.noDetect=true;it.done=true;render();
     }
   }
   setStatus(items.length+' specimen(s) processed on-device.',true);
