@@ -180,7 +180,7 @@ const PRETTY={aedes_aegypti:"Aedes aegypti",anopheles_gambiae:"An. gambiae",anop
 const IMG=256,RESIZE=291,MEAN=[0.485,0.456,0.406],STD=[0.229,0.224,0.225],CONF=0.75;
 // --- detector (YOLO) settings ---
 const DET_SIZE=960;      // must match the imgsz you exported the onnx at
-const DET_CONF=0.20;     // your chosen box confidence
+const DET_CONF=0.40;     // box confidence: higher = rejects weak/junk detections, but may miss faint real mosquitoes
 const DET_IOU=0.7;       // NMS overlap threshold (unused for single-box, kept for reference)
 const DET_PAD=0.15;      // padding around the box before cropping (wings/legs)
 let session=null,detSession=null,items=[],idc=0;
