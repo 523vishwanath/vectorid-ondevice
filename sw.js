@@ -1,10 +1,11 @@
 // VectorID service worker — caches everything for true offline use.
 // Bump CACHE_VERSION whenever you change index.html or the model to force a refresh.
-const CACHE_VERSION = 'vectorid-v1';
+const CACHE_VERSION = 'vectorid-v2';
 const ASSETS = [
   './',
   './index.html',
   './vectorcam.onnx',
+  './vectorcam_detector.onnx',
   'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.20.1/dist/ort.min.js',
   'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.20.1/dist/ort-wasm-simd-threaded.wasm',
   'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.20.1/dist/ort-wasm-simd-threaded.jsep.wasm',
